@@ -433,6 +433,40 @@ export const db = {
       created_at: new Date().toISOString(),
     };
 
+    const supabase = createClient();
+    if (supabase) {
+      const isUuid =
+        data.user_id &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.user_id);
+
+      const reservationPayload = {
+        user_id: isUuid ? data.user_id : null,
+        customer_name: data.customer_name,
+        customer_email: data.customer_email,
+        customer_phone: data.customer_phone,
+        guest_count: data.guest_count,
+        booking_date: data.booking_date,
+        booking_time: data.booking_time,
+        special_requests: data.special_requests || null,
+        status: "confirmed",
+      };
+
+      const { data: inserted, error: resErr } = await supabase
+        .from("reservations")
+        .insert([reservationPayload])
+        .select()
+        .single();
+
+      if (resErr) {
+        console.error("Supabase reservation insert error:", resErr);
+        throw new Error(`Failed to save reservation to database: ${resErr.message}`);
+      }
+
+      if (inserted) {
+        newReservation.id = inserted.id;
+      }
+    }
+
     const current = getStored<Reservation[]>(KEYS.RESERVATIONS, []);
     setStored(KEYS.RESERVATIONS, [newReservation, ...current]);
 
@@ -453,6 +487,17 @@ export const db = {
   },
 
   async getReservations(userId?: string): Promise<Reservation[]> {
+    const supabase = createClient();
+    if (supabase) {
+      let query = supabase.from("reservations").select("*").order("created_at", { ascending: false });
+      if (userId) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+        if (isUuid) query = query.eq("user_id", userId);
+      }
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) return data as Reservation[];
+    }
+
     const res = getStored<Reservation[]>(KEYS.RESERVATIONS, []);
     if (userId) {
       return res.filter((r) => r.user_id === userId);
@@ -672,6 +717,85 @@ export const db = {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    const supabase = createClient();
+    if (supabase) {
+      const isUserUuid =
+        data.user_id &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.user_id);
+
+      const orderPayload = {
+        order_number: orderNumber,
+        user_id: isUserUuid ? data.user_id : null,
+        customer_name: data.customer_name,
+        customer_email: data.customer_email,
+        customer_phone: data.customer_phone,
+        delivery_address: newAddress,
+        subtotal: computedSubtotal,
+        delivery_fee: deliveryFee,
+        tax: tax,
+        total_amount: totalAmount,
+        order_status: "order_placed",
+      };
+
+      const { data: insertedOrder, error: orderErr } = await supabase
+        .from("orders")
+        .insert([orderPayload])
+        .select()
+        .single();
+
+      if (orderErr) {
+        console.error("Supabase order insert error:", orderErr);
+        throw new Error(`Failed to save order to database: ${orderErr.message}`);
+      }
+
+      if (insertedOrder) {
+        newOrder.id = insertedOrder.id;
+
+        // 1. Insert Order Items
+        const orderItemsPayload = verifiedItems.map((item) => {
+          const isDishUuid =
+            item.dish_id &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.dish_id);
+          return {
+            order_id: insertedOrder.id,
+            dish_id: isDishUuid ? item.dish_id : null,
+            dish_name: item.dish_name,
+            dish_image: item.dish_image || null,
+            is_veg: item.is_veg,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            subtotal: item.subtotal,
+          };
+        });
+
+        const { error: itemsErr } = await supabase
+          .from("order_items")
+          .insert(orderItemsPayload);
+
+        if (itemsErr) {
+          console.error("Supabase order_items insert error:", itemsErr);
+        }
+
+        // 2. Insert Payment Record
+        const paymentPayload = {
+          order_id: insertedOrder.id,
+          payment_method: data.payment_method,
+          payment_status: paymentStatus,
+          transaction_id: transactionId,
+          amount: totalAmount,
+          paid_at: isCod ? null : new Date().toISOString(),
+        };
+
+        const { error: payErr } = await supabase
+          .from("payments")
+          .insert([paymentPayload]);
+
+        if (payErr) {
+          console.error("Supabase payments insert error:", payErr);
+        }
+      }
+    }
 
     const updatedOrders = [newOrder, ...existingOrders];
     setStored(KEYS.ORDERS, updatedOrders);
