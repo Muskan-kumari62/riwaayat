@@ -426,21 +426,37 @@ export const db = {
   async createReservation(
     data: Omit<Reservation, "id" | "status" | "created_at">
   ): Promise<Reservation> {
+    const reservationId = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `res-${Date.now()}`;
+
     const newReservation: Reservation = {
       ...data,
-      id: `res-${Date.now()}`,
+      id: reservationId,
       status: "confirmed",
       created_at: new Date().toISOString(),
     };
 
     const supabase = createClient();
     if (supabase) {
-      const isUuid =
+      const { data: sessionData } = await supabase.auth.getSession();
+      const sessionUser = sessionData?.session?.user;
+
+      let validUserId: string | null = null;
+      if (sessionUser?.id) {
+        validUserId = sessionUser.id;
+      } else if (
         data.user_id &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.user_id);
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.user_id)
+      ) {
+        validUserId = data.user_id;
+      }
+
+      if (validUserId) {
+        newReservation.user_id = validUserId;
+      }
 
       const reservationPayload = {
-        user_id: isUuid ? data.user_id : null,
+        id: reservationId,
+        user_id: validUserId,
         customer_name: data.customer_name,
         customer_email: data.customer_email,
         customer_phone: data.customer_phone,
@@ -451,19 +467,13 @@ export const db = {
         status: "confirmed",
       };
 
-      const { data: inserted, error: resErr } = await supabase
+      const { error: resErr } = await supabase
         .from("reservations")
-        .insert([reservationPayload])
-        .select()
-        .single();
+        .insert([reservationPayload]);
 
       if (resErr) {
         console.error("Supabase reservation insert error:", resErr);
         throw new Error(`Failed to save reservation to database: ${resErr.message}`);
-      }
-
-      if (inserted) {
-        newReservation.id = inserted.id;
       }
     }
 
@@ -473,7 +483,7 @@ export const db = {
     // Also add a confirmation notification
     const newNotif: NotificationItem = {
       id: `notif-${Date.now()}`,
-      user_id: data.user_id,
+      user_id: newReservation.user_id,
       title: "Table Reservation Confirmed!",
       message: `Your table for ${data.guest_count} guests on ${data.booking_date} at ${data.booking_time} has been confirmed.`,
       type: "order",
@@ -720,14 +730,27 @@ export const db = {
 
     const supabase = createClient();
     if (supabase) {
-      const isUserUuid =
+      const { data: sessionData } = await supabase.auth.getSession();
+      const sessionUser = sessionData?.session?.user;
+
+      let validUserId: string | null = null;
+      if (sessionUser?.id) {
+        validUserId = sessionUser.id;
+      } else if (
         data.user_id &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.user_id);
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.user_id)
+      ) {
+        validUserId = data.user_id;
+      }
+
+      if (validUserId) {
+        newOrder.user_id = validUserId;
+      }
 
       const orderPayload = {
         id: orderId,
         order_number: orderNumber,
-        user_id: isUserUuid ? data.user_id : null,
+        user_id: validUserId,
         customer_name: data.customer_name,
         customer_email: data.customer_email,
         customer_phone: data.customer_phone,
