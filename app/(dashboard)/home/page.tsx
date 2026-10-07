@@ -15,6 +15,7 @@ import {
   ChefHat,
   Crown,
   HeartHandshake,
+  Search,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { CategoryCard } from "@/components/cards/category-card";
@@ -32,6 +33,7 @@ export default function HomePage() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isReservationOpen, setIsReservationOpen] = useState(false);
   const [reservationServiceTitle, setReservationServiceTitle] = useState("Table Reservation");
 
@@ -60,10 +62,22 @@ export default function HomePage() {
     loadData();
   }, []);
 
-  const filteredDishes =
-    selectedCategoryTab === "all"
-      ? dishes
-      : dishes.filter((d) => d.category_id === selectedCategoryTab);
+  const searchTrimmed = searchQuery.trim().toLowerCase();
+  const filteredDishes = dishes.filter((d) => {
+    const matchesCat =
+      selectedCategoryTab === "all" || d.category_id === selectedCategoryTab;
+
+    const catObj = categories.find((c) => c.id === d.category_id);
+    const catName = (catObj?.name || d.category_name || "").toLowerCase();
+
+    const matchesSearch =
+      !searchTrimmed ||
+      d.name.toLowerCase().includes(searchTrimmed) ||
+      (d.description && d.description.toLowerCase().includes(searchTrimmed)) ||
+      catName.includes(searchTrimmed);
+
+    return matchesCat && matchesSearch;
+  });
 
   // Filtered highlights for dedicated sections
   const rajasthaniDishes = dishes.filter((d) => d.category_id === "cat-rajasthani");
@@ -275,6 +289,20 @@ export default function HomePage() {
           <p className="text-xs sm:text-sm text-muted-foreground mt-3">
             Handcrafted with freshly ground garam masala, creamy makhani gravies, and unhurried charcoal cooking. All prices in Indian Rupees (₹).
           </p>
+
+          {/* Search Bar */}
+          <div className="mt-6 max-w-md mx-auto relative">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted-foreground">
+              <Search className="w-4 h-4 text-amber-400" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search dishes or categories (e.g. Dal Makhani, Paneer, Biryani)..."
+              className="w-full pl-10 pr-4 py-3 text-xs rounded-2xl bg-secondary/80 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-amber-400 shadow-md transition-colors"
+            />
+          </div>
         </div>
 
         {/* Category Tabs */}
@@ -305,11 +333,23 @@ export default function HomePage() {
         </div>
 
         {/* Dish Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-          {filteredDishes.map((dish) => (
-            <DishCard key={dish.id} dish={dish} onSelect={handleSelectDish} />
-          ))}
-        </div>
+        {filteredDishes.length === 0 ? (
+          <div className="py-16 text-center glass-card rounded-2xl border border-border">
+            <Utensils className="w-10 h-10 text-amber-400/40 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-foreground">
+              No dishes found matching &quot;{searchQuery}&quot;
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Try searching for a different keyword or reset category selection.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            {filteredDishes.map((dish) => (
+              <DishCard key={dish.id} dish={dish} onSelect={handleSelectDish} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* 5. RAJASTHANI SPECIALTIES SECTION (Requirement 15) */}
