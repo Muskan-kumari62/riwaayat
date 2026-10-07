@@ -660,7 +660,7 @@ export const db = {
     const tax = Math.round(taxableAmount * 0.05 * 100) / 100; // 5% GST
     const totalAmount = Math.round((taxableAmount + deliveryFee + tax) * 100) / 100;
 
-    const orderId = `ord-${Date.now()}`;
+    const orderId = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `ord-${Date.now()}`;
     const orderNumber = `ORD-2026-${String(existingOrders.length + 1).padStart(4, "0")}`;
 
     verifiedItems.forEach((i) => (i.order_id = orderId));
@@ -725,6 +725,7 @@ export const db = {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.user_id);
 
       const orderPayload = {
+        id: orderId,
         order_number: orderNumber,
         user_id: isUserUuid ? data.user_id : null,
         customer_name: data.customer_name,
@@ -738,62 +739,56 @@ export const db = {
         order_status: "order_placed",
       };
 
-      const { data: insertedOrder, error: orderErr } = await supabase
+      const { error: orderErr } = await supabase
         .from("orders")
-        .insert([orderPayload])
-        .select()
-        .single();
+        .insert([orderPayload]);
 
       if (orderErr) {
         console.error("Supabase order insert error:", orderErr);
         throw new Error(`Failed to save order to database: ${orderErr.message}`);
       }
 
-      if (insertedOrder) {
-        newOrder.id = insertedOrder.id;
-
-        // 1. Insert Order Items
-        const orderItemsPayload = verifiedItems.map((item) => {
-          const isDishUuid =
-            item.dish_id &&
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.dish_id);
-          return {
-            order_id: insertedOrder.id,
-            dish_id: isDishUuid ? item.dish_id : null,
-            dish_name: item.dish_name,
-            dish_image: item.dish_image || null,
-            is_veg: item.is_veg,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            subtotal: item.subtotal,
-          };
-        });
-
-        const { error: itemsErr } = await supabase
-          .from("order_items")
-          .insert(orderItemsPayload);
-
-        if (itemsErr) {
-          console.error("Supabase order_items insert error:", itemsErr);
-        }
-
-        // 2. Insert Payment Record
-        const paymentPayload = {
-          order_id: insertedOrder.id,
-          payment_method: data.payment_method,
-          payment_status: paymentStatus,
-          transaction_id: transactionId,
-          amount: totalAmount,
-          paid_at: isCod ? null : new Date().toISOString(),
+      // 1. Insert Order Items
+      const orderItemsPayload = verifiedItems.map((item) => {
+        const isDishUuid =
+          item.dish_id &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.dish_id);
+        return {
+          order_id: orderId,
+          dish_id: isDishUuid ? item.dish_id : null,
+          dish_name: item.dish_name,
+          dish_image: item.dish_image || null,
+          is_veg: item.is_veg,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: item.subtotal,
         };
+      });
 
-        const { error: payErr } = await supabase
-          .from("payments")
-          .insert([paymentPayload]);
+      const { error: itemsErr } = await supabase
+        .from("order_items")
+        .insert(orderItemsPayload);
 
-        if (payErr) {
-          console.error("Supabase payments insert error:", payErr);
-        }
+      if (itemsErr) {
+        console.error("Supabase order_items insert error:", itemsErr);
+      }
+
+      // 2. Insert Payment Record
+      const paymentPayload = {
+        order_id: orderId,
+        payment_method: data.payment_method,
+        payment_status: paymentStatus,
+        transaction_id: transactionId,
+        amount: totalAmount,
+        paid_at: isCod ? null : new Date().toISOString(),
+      };
+
+      const { error: payErr } = await supabase
+        .from("payments")
+        .insert([paymentPayload]);
+
+      if (payErr) {
+        console.error("Supabase payments insert error:", payErr);
       }
     }
 
