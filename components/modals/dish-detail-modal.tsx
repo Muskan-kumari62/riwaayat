@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   X,
   Star,
@@ -13,6 +14,7 @@ import {
   Check,
   ShoppingBag,
   Utensils,
+  Zap,
 } from "lucide-react";
 import { Dish } from "@/types";
 import { formatINR } from "@/lib/utils";
@@ -39,6 +41,7 @@ const CURATED_ADDONS = [
 ];
 
 export function DishDetailModal({ dish, isOpen, onClose }: DishDetailModalProps) {
+  const router = useRouter();
   const { addToCartWithOptions } = useCart();
 
   const [portion, setPortion] = useState<"standard" | "royal">("standard");
@@ -88,6 +91,19 @@ export function DishDetailModal({ dish, isOpen, onClose }: DishDetailModalProps)
       addOnPrice: (basePrice - dish.price) + addonsTotal,
     });
     onClose();
+  };
+
+  const handleOrderNow = () => {
+    addToCartWithOptions(dish, {
+      quantity,
+      portion,
+      spice_level: selectedSpice,
+      selected_addons: selectedAddons,
+      item_notes: chefNotes.trim() || undefined,
+      addOnPrice: (basePrice - dish.price) + addonsTotal,
+    });
+    onClose();
+    router.push("/checkout");
   };
 
   return (
@@ -348,14 +364,24 @@ export function DishDetailModal({ dish, isOpen, onClose }: DishDetailModalProps)
             </button>
           </div>
 
-          {/* Action Button */}
-          <button
-            onClick={handleAddToCart}
-            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-amber-950/60 transition-all hover:scale-[1.02]"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            <span>Add to Dining Order • {formatINR(finalPrice)}</span>
-          </button>
+          {/* Action Buttons: Add to Cart & Order Now */}
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto flex-1">
+            <button
+              onClick={handleAddToCart}
+              className="w-full sm:w-auto flex-1 py-3.5 px-4 rounded-xl bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-stone-950 border border-amber-500/40 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Add to Cart • {formatINR(finalPrice)}</span>
+            </button>
+
+            <button
+              onClick={handleOrderNow}
+              className="w-full sm:w-auto flex-1 py-3.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-amber-950/60 transition-all hover:scale-[1.02]"
+            >
+              <Zap className="w-4 h-4 fill-stone-950" />
+              <span>Order Now</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

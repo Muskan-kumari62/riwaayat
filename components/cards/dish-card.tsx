@@ -2,7 +2,8 @@
 
 import React from "react";
 import Image from "next/image";
-import { Star, Sparkles, Plus, Minus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Star, Sparkles, Plus, Minus, Zap } from "lucide-react";
 import { Dish } from "@/types";
 import { formatINR } from "@/lib/utils";
 import { useCart } from "@/lib/cart/cart-context";
@@ -13,6 +14,7 @@ interface DishCardProps {
 }
 
 export function DishCard({ dish, onSelect }: DishCardProps) {
+  const router = useRouter();
   const { addToCart, updateQuantity, getItemQuantity } = useCart();
   const quantity = getItemQuantity(dish.id);
   const [imgSrc, setImgSrc] = React.useState(
@@ -22,6 +24,14 @@ export function DishCard({ dish, onSelect }: DishCardProps) {
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
     addToCart(dish);
+  };
+
+  const handleOrderNow = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (quantity === 0) {
+      addToCart(dish);
+    }
+    router.push("/checkout");
   };
 
   const handleDecrease = (e: React.MouseEvent) => {
@@ -96,50 +106,61 @@ export function DishCard({ dish, onSelect }: DishCardProps) {
         </div>
       </div>
 
-      {/* Footer Price & Action */}
-      <div className="px-5 pb-5 pt-3 border-t border-border/40 flex items-center justify-between">
-        <div className="flex flex-col">
+      {/* Footer Price & Actions */}
+      <div className="px-5 pb-5 pt-3 border-t border-border/40 flex items-center justify-between gap-2">
+        <div className="flex flex-col flex-shrink-0">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
             Price
           </span>
-          <span className="font-serif text-lg font-bold text-amber-400">
+          <span className="font-serif text-base sm:text-lg font-bold text-amber-400">
             {formatINR(dish.price)}
           </span>
         </div>
 
-        {quantity > 0 ? (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1.5 p-1 rounded-xl bg-amber-500/10 border border-amber-500/40"
-          >
-            <button
-              onClick={handleDecrease}
-              className="w-6 h-6 rounded-lg bg-secondary/80 hover:bg-amber-500 hover:text-stone-950 flex items-center justify-center text-foreground transition-colors"
-              aria-label="Decrease quantity"
+        <div className="flex items-center gap-2">
+          {quantity > 0 ? (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1.5 p-1 rounded-xl bg-amber-500/10 border border-amber-500/40"
             >
-              <Minus className="w-3 h-3" />
-            </button>
-            <span className="w-5 text-center text-xs font-bold text-amber-400">
-              {quantity}
-            </span>
+              <button
+                onClick={handleDecrease}
+                className="w-6 h-6 rounded-lg bg-secondary/80 hover:bg-amber-500 hover:text-stone-950 flex items-center justify-center text-foreground transition-colors"
+                aria-label="Decrease quantity"
+              >
+                <Minus className="w-3 h-3" />
+              </button>
+              <span className="w-5 text-center text-xs font-bold text-amber-400">
+                {quantity}
+              </span>
+              <button
+                onClick={handleIncrease}
+                className="w-6 h-6 rounded-lg bg-amber-500 text-stone-950 hover:bg-amber-400 flex items-center justify-center transition-colors"
+                aria-label="Increase quantity"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={handleIncrease}
-              className="w-6 h-6 rounded-lg bg-amber-500 text-stone-950 hover:bg-amber-400 flex items-center justify-center transition-colors"
-              aria-label="Increase quantity"
+              onClick={handleAdd}
+              className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-stone-950 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all shadow-sm"
+              title="Add to dining cart"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add</span>
             </button>
-          </div>
-        ) : (
+          )}
+
           <button
-            onClick={handleAdd}
-            className="px-3.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-stone-950 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
-            title="Add to dining order"
+            onClick={handleOrderNow}
+            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md hover:shadow-amber-500/20 active:scale-95"
+            title="Instant Order Now"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add</span>
+            <Zap className="w-3.5 h-3.5 fill-stone-950" />
+            <span>Order Now</span>
           </button>
-        )}
+        </div>
       </div>
     </div>
   );
