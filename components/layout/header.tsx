@@ -23,8 +23,10 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useTheme } from "@/lib/theme/theme-context";
 import { useCart } from "@/lib/cart/cart-context";
 import { db } from "@/lib/db";
-import { NotificationItem } from "@/types";
+import { NotificationItem, Dish, Category } from "@/types";
 import { useToast } from "@/lib/toast/toast-context";
+import { DishDetailModal } from "@/components/modals/dish-detail-modal";
+import { Utensils } from "lucide-react";
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -44,6 +46,12 @@ export function Header({ onToggleSidebar, isSidebarOpen }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchModal, setShowSearchModal] = useState(false);
 
+  // Dishes & Categories data for search
+  const [dishes, setDishes] = useState<Dish[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
+  const [isDishModalOpen, setIsDishModalOpen] = useState(false);
+
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -55,6 +63,26 @@ export function Header({ onToggleSidebar, isSidebarOpen }: HeaderProps) {
     }
     fetchNotifications();
   }, [user]);
+
+  // Load dishes and categories for search
+  useEffect(() => {
+    async function loadSearchData() {
+      const [dshs, cats] = await Promise.all([
+        db.getDishes(),
+        db.getCategories(),
+      ]);
+      const enrichedDishes = dshs.map((d) => {
+        const cat = cats.find((c) => c.id === d.category_id);
+        return {
+          ...d,
+          category_name: d.category_name || cat?.name || "",
+        };
+      });
+      setDishes(enrichedDishes);
+      setCategories(cats);
+    }
+    loadSearchData();
+  }, []);
 
   // Click outside listener for dropdowns
   useEffect(() => {
@@ -78,6 +106,23 @@ export function Header({ onToggleSidebar, isSidebarOpen }: HeaderProps) {
     setNotifications(updated);
     success("All notifications marked as read");
   };
+
+  // Search filtering logic
+  const searchTrimmed = searchQuery.trim().toLowerCase();
+  const searchResults = searchTrimmed
+    ? dishes.filter((d) => {
+        const dishName = d.name.toLowerCase();
+        const dishDesc = (d.description || "").toLowerCase();
+        const catName = (d.category_name || "").toLowerCase();
+        return (
+          dishName.includes(searchTrimmed) ||
+          dishDesc.includes(searchTrimmed) ||
+          catName.includes(searchTrimmed)
+        );
+      })
+    : [];
+
+  const quickPills = ["Paneer", "Biryani", "Kebab", "South Indian", "Desserts", "Thali"];
 
   const navLinks = [
     { label: "Home", href: "/home" },
@@ -392,13 +437,13 @@ export function Header({ onToggleSidebar, isSidebarOpen }: HeaderProps) {
           <div className="w-full max-w-xl glass-card rounded-2xl border border-amber-500/30 p-6 shadow-2xl animate-slide-up">
             <div className="flex items-center justify-between pb-4 border-b border-border/60">
               <div className="flex items-center gap-3 flex-1">
-                <Search className="w-5 h-5 text-amber-400" />
+                <Search className="w-5 h-5 text-amber-400 flex-shrink-0" />
                 <input
                   type="text"
-                  placeholder="Search dishes (e.g. Biryani, Truffle, Salmon)..."
+                  placeholder="Search dishes or categories (e.g. Paneer, Biryani, Kebab)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-transparent border-none text-foreground placeholder:text-muted-foreground focus:outline-none text-base"
+                  className="w-full bg-transparent border-none text-foreground placeholder:text-muted-foreground focus:outline-none text-sm sm:text-base"
                   autoFocus
                 />
               </div>
@@ -410,42 +455,110 @@ export function Header({ onToggleSidebar, isSidebarOpen }: HeaderProps) {
               </button>
             </div>
 
-            <div className="mt-4">
-              <div className="flex gap-2 mb-3">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Quick Links:
-                </span>
-                <a
-                  href="/categories"
-                  onClick={() => setShowSearchModal(false)}
-                  className="text-xs text-amber-400 hover:underline"
-                >
-                  Categories
-                </a>
-                <span className="text-muted-foreground">•</span>
-                <a
-                  href="/services"
-                  onClick={() => setShowSearchModal(false)}
-                  className="text-xs text-amber-400 hover:underline"
-                >
-                  Services
-                </a>
-                <span className="text-muted-foreground">•</span>
-                <a
-                  href="/home#menu"
-                  onClick={() => setShowSearchModal(false)}
-                  className="text-xs text-amber-400 hover:underline"
-                >
-                  Popular Dishes
-                </a>
+            {/* Quick Suggestions when empty */}
+            {!searchTrimmed && (
+              <div className="mt-4">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Quick Suggestions:
+                  </span>
+                  {quickPills.map((pill) => (
+                    <button
+                      key={pill}
+                      onClick={() => setSearchQuery(pill)}
+                      className="px-2.5 py-1 text-xs rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors"
+                    >
+                      {pill}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 text-xs text-muted-foreground">
+                  <span>Quick Links:</span>
+                  <a href="/categories" onClick={() => setShowSearchModal(false)} className="text-amber-400 hover:underline">Categories</a>
+                  <span>•</span>
+                  <a href="/services" onClick={() => setShowSearchModal(false)} className="text-amber-400 hover:underline">Services</a>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Press Esc or click close to dismiss.
-              </p>
-            </div>
+            )}
+
+            {/* Live Search Results */}
+            {searchTrimmed && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Dishes Found ({searchResults.length})
+                  </span>
+                </div>
+
+                {searchResults.length > 0 ? (
+                  <div className="max-h-80 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {searchResults.map((dish) => (
+                      <div
+                        key={dish.id}
+                        onClick={() => {
+                          setSelectedDish(dish);
+                          setIsDishModalOpen(true);
+                          setShowSearchModal(false);
+                        }}
+                        className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-amber-500/10 border border-transparent hover:border-amber-500/30 cursor-pointer transition-all group"
+                      >
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-secondary">
+                          <Image
+                            src={dish.image_url || dish.image || "/images/dishes/indian-food-placeholder.jpg"}
+                            alt={dish.name}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                dish.is_veg ? "bg-emerald-500" : "bg-rose-500"
+                              }`}
+                            />
+                            <h4 className="text-sm font-semibold text-foreground truncate group-hover:text-amber-400 transition-colors">
+                              {dish.name}
+                            </h4>
+                            {dish.category_name && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-mono">
+                                {dish.category_name}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {dish.description}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <span className="text-sm font-bold text-amber-400">
+                            ₹{dish.price}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Utensils className="w-8 h-8 text-amber-400/40 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-foreground">No dishes found</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      No culinary items matched &quot;{searchQuery}&quot;. Try searching for &quot;Paneer&quot;, &quot;Biryani&quot;, or &quot;Kebabs&quot;.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Dish Detail Modal for Search Results */}
+      <DishDetailModal
+        dish={selectedDish}
+        isOpen={isDishModalOpen}
+        onClose={() => setIsDishModalOpen(false)}
+      />
     </header>
   );
 }

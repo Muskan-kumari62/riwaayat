@@ -66,10 +66,17 @@ export default function CategoriesPage() {
       (selectedCategory === "cat-vegetarian"
         ? d.is_veg === true || d.category_id === "cat-vegetarian"
         : d.category_id === selectedCategory);
+
+    const catObj = categories.find((c) => c.id === d.category_id);
+    const catName = (catObj?.name || d.category_name || "").toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
+
     const matchesSearch =
-      !searchQuery ||
-      d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.description.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      d.name.toLowerCase().includes(q) ||
+      (d.description && d.description.toLowerCase().includes(q)) ||
+      catName.includes(q);
+
     return matchesCat && matchesSearch;
   });
 
